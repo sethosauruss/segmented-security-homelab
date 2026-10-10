@@ -1,0 +1,15 @@
+# secrets and backups
+*.env
+.env*
+config.xml
+*config-backup*
+Preferences.xml
+.LocalAdminToken
+*.tar.gz
+*.key
+*.pem
+authkey*
+
+# OS junk
+.DS_Store
+Thumbs.db
