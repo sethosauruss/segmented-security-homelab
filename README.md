@@ -67,12 +67,6 @@ The power board is fixed at the bottom of the rack, and power adapters and the m
 - **Hardware and fabrication:** a custom 3D-printed rack plate and trays
 - **Documentation:** a dated build log and a record of problems and fixes
 
-## Problems I hit (and fixed)
-- **Copied the installer to the USB instead of flashing it:** a `.img.gz` has to be written with an imaging tool (balenaEtcher), not copied as a file.
-- **Pulled the USB before pressing Reboot:** the system lost its install media and threw I/O errors. Fix: power-cycle, boot from the internal disk, and press Reboot first next time.
-- **Wrong installer variant:** the serial-console image shows nothing on a monitor. I needed the VGA memstick image.
-- **Almost bought an unmanaged switch:** several 8-port gigabit switches look the same but have no VLAN support. I only buy models that list 802.1Q VLANs.
-
 ## Security note
 This repository contains no credentials, tokens, firewall configuration backups or real network addresses. Example addresses are placeholders.
 
