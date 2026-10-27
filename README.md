@@ -2,7 +2,7 @@
 
 A rack-mounted security homelab in a 6U 10-inch rack, built to learn network segmentation, virtualisation and Linux administration. It runs on my desk and is designed for practising segmentation, firewalling, monitoring and attack-and-defend labs.
 
-> **Status:** in progress. Parts are on order. The status table below shows what is built and what is planned.
+> **Status:** in progress. Parts are being ordered. The status table below shows what is built and what is planned.
 
 ## Goals
 - Build a segmented network with a real firewall (pfSense) and VLANs
@@ -19,6 +19,8 @@ Deco Wi-Fi router
    |
 pfSense firewall (HP EliteDesk 800 G3 Mini)
    |
+Patch panel
+   |
 TP-Link TL-SG108E managed switch (802.1Q VLANs)
    |-- Trusted VLAN   : my PC, laptop
    |-- Lab VLAN       : Proxmox host and lab VMs
@@ -34,10 +36,12 @@ VLAN IDs: _to be decided._ Firewall rules will be documented in `docs/security.m
 |------|--------|------|
 | U6 | HP EliteDesk 800 G3 Mini | pfSense firewall |
 | U5 | HP EliteDesk 800 G3 Mini | Proxmox host |
-| U4 | TP-Link TL-SG108E | Managed switch, VLANs |
-| U3 | Raspberry Pi 5 + JetKVM | Services; remote keyboard/video/mouse |
-| U2 | Cable brush panel | Cable management |
-| U1 | 10" rack PDU | Power |
+| U4 | 12-port patch panel and brush panel (0.5U each) | Cable management |
+| U3 | TP-Link TL-SG108E and JetKVM (printed 1U plate) | Managed switch; remote keyboard/video/mouse |
+| U2 | Raspberry Pi 5 shelf | Services |
+| U1 | Spare | |
+
+The power board is fixed at the bottom of the rack, and power adapters and the media drive are mounted at the back. Patch cables are white, with colour-coded labels for each network zone.
 
 ## Status
 
@@ -48,6 +52,7 @@ VLAN IDs: _to be decided._ Firewall rules will be documented in `docs/security.m
 | Hardware ordered | Planned |
 | pfSense on the HP firewall | Planned |
 | Proxmox on the HP host | Planned |
+| 3D-printed trays and switch/JetKVM plate | Planned |
 | VLANs on the switch, firewall rules | Planned |
 | Pi rebuilt (Plex, Pi-hole, Uptime Kuma, Tailscale) | Planned |
 | Remote access via Tailscale | Planned |
@@ -59,7 +64,14 @@ VLAN IDs: _to be decided._ Firewall rules will be documented in `docs/security.m
 - **Virtualisation:** Proxmox VMs and containers
 - **Linux administration:** a headless Pi 5 managed from the command line, Docker Compose, Samba, fstab
 - **Secure remote access:** Tailscale instead of port forwarding
+- **Hardware and fabrication:** a custom 3D-printed rack plate and trays
 - **Documentation:** a dated build log and a record of problems and fixes
+
+## Problems I hit (and fixed)
+- **Copied the installer to the USB instead of flashing it:** a `.img.gz` has to be written with an imaging tool (balenaEtcher), not copied as a file.
+- **Pulled the USB before pressing Reboot:** the system lost its install media and threw I/O errors. Fix: power-cycle, boot from the internal disk, and press Reboot first next time.
+- **Wrong installer variant:** the serial-console image shows nothing on a monitor. I needed the VGA memstick image.
+- **Almost bought an unmanaged switch:** several 8-port gigabit switches look the same but have no VLAN support. I only buy models that list 802.1Q VLANs.
 
 ## Security note
 This repository contains no credentials, tokens, firewall configuration backups or real network addresses. Example addresses are placeholders.
