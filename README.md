@@ -1,74 +1,95 @@
 # Segmented Security Homelab
 
-A rack-mounted security homelab in a 6U 10-inch rack, built to learn network segmentation, virtualisation and Linux administration. It runs on my desk and is designed for practising segmentation, firewalling, monitoring and attack-and-defend labs.
+A 6U rack-mounted homelab built to learn network segmentation, firewalling and monitoring on real hardware. It runs a pfSense firewall, a Proxmox host for attack and defence VMs, a VLAN-capable switch and a Raspberry Pi for services, with out-of-band management through a JetKVM.
 
-> **Status:** in progress. Parts are being ordered. The status table below shows what is built and what is planned.
+**Status:** parts ordered (27 Oct 2026), build planned for November.
 
 ## Goals
-- Build a segmented network with a real firewall (pfSense) and VLANs
-- Run a Proxmox host for safe attack-and-defend labs
-- Practise secure remote access without exposing services to the internet
-- Document the build, including mistakes and fixes
 
-## Architecture
+- Segment the network into zones with VLANs and firewall rules
+- Run attacker and vulnerable VMs in an isolated lab
+- Collect logs and detect attacks (SIEM)
+- Remote access without port forwarding
+- Document the whole build, including mistakes
+
+## Rack layout (6U, 10")
+
+| U | Device |
+|---|--------|
+| 6 | HP EliteDesk 800 G3 Mini, pfSense firewall |
+| 5 | HP EliteDesk 800 G3 Mini, Proxmox host |
+| 4 | Patch panel (0.5U) + brush panel (0.5U) |
+| 3 | TP-Link TL-SG108E switch + JetKVM (custom 3D-printed 1U plate) |
+| 2 | Raspberry Pi 5 shelf |
+| 1 | Spare |
+
+The power board sits at the bottom or back. Power bricks are strapped at the back and the media drive is stuck to the rear.
+
+## Network design
 
 ```
-Internet
-   |
-Deco Wi-Fi router
-   |
-pfSense firewall (HP EliteDesk 800 G3 Mini)
-   |
-Patch panel
-   |
-TP-Link TL-SG108E managed switch (802.1Q VLANs)
-   |-- Trusted VLAN   : my PC, laptop
-   |-- Lab VLAN       : Proxmox host and lab VMs
-   |-- IoT/DMZ VLAN   : Raspberry Pi 5 services (media, DNS, monitoring)
-   |-- Management     : JetKVM
+Internet -> Deco Wi-Fi -> pfSense -> patch panel -> TL-SG108E (802.1Q) -> devices
 ```
 
-VLAN IDs: _to be decided._ Firewall rules will be documented in `docs/security.md`.
+| Zone | Purpose |
+|------|---------|
+| Trusted | Personal devices |
+| Lab | Proxmox VMs (Kali, vulnerable targets) |
+| IoT / DMZ | Anything exposed or untrusted |
+| Management | JetKVM and admin interfaces |
 
-## Rack layout (Tecmojo 6U, 10")
+- VLAN IDs: to be decided
+- The TL-SG108E is an "Easy Smart" managed switch. Unmanaged switches can't do VLANs.
+- Cable colour coding uses white cables with coloured labels: green trusted, blue lab, orange IoT/DMZ, grey uplink.
 
-| Unit | Device | Role |
-|------|--------|------|
-| U6 | HP EliteDesk 800 G3 Mini | pfSense firewall |
-| U5 | HP EliteDesk 800 G3 Mini | Proxmox host |
-| U4 | 12-port patch panel and brush panel (0.5U each) | Cable management |
-| U3 | TP-Link TL-SG108E and JetKVM (printed 1U plate) | Managed switch; remote keyboard/video/mouse |
-| U2 | Raspberry Pi 5 shelf | Services |
-| U1 | Spare | |
+## Hardware
 
-The power board is fixed at the bottom of the rack, and power adapters and the media drive are mounted at the back. Patch cables are white, with colour-coded labels for each network zone.
+| Part | Role |
+|------|------|
+| 2 × HP EliteDesk 800 G3 Mini (i5-6500T, 8GB, 256GB) | Firewall and Proxmox host |
+| TP-Link TL-SG108E | VLAN switch |
+| Raspberry Pi 5 (4GB) | Plex, Pi-hole, Uptime Kuma, Tailscale |
+| JetKVM | Remote console and BIOS access, on the management VLAN |
+| Tecmojo 6U 10" rack + 12-port patch panel + brush panels | Enclosure and cable management |
+| USB3 Ethernet adapter | Second NIC for the firewall |
 
-## Status
+## Software
 
-| Part | Status |
+- **Firewall:** pfSense (routing, NAT, rules, VLAN interfaces)
+- **Hypervisor:** Proxmox VE (Kali, Metasploitable/DVWA, SIEM)
+- **Pi:** Raspberry Pi OS Lite (64-bit), Docker Compose, Plex, Pi-hole, Uptime Kuma
+- **Remote access:** Tailscale subnet router with ACLs, no port forwarding
+- **Planned:** Wazuh for detection, 16GB RAM upgrade for Proxmox
+
+## Build status
+
+| Step | Status |
 |------|--------|
-| pfSense CE 2.7.2 installed and booting (on a test machine) | Done |
-| Plex backup and Pi rebuild plan | Done |
-| Hardware ordered | Planned |
-| pfSense on the HP firewall | Planned |
-| Proxmox on the HP host | Planned |
-| 3D-printed trays and switch/JetKVM plate | Planned |
-| VLANs on the switch, firewall rules | Planned |
-| Pi rebuilt (Plex, Pi-hole, Uptime Kuma, Tailscale) | Planned |
-| Remote access via Tailscale | Planned |
-| Wazuh and attack simulation (CALDERA, Atomic Red Team) | Later (needs 16GB RAM) |
+| Parts ordered (Amazon + eBay) | Done |
+| Rack assembly and cabling | Planned |
+| pfSense install and VLANs | Planned |
+| Proxmox install and lab VMs | Planned |
+| Pi rebuild and Plex restore | Planned |
+| Tailscale tested from outside the network | Planned |
+| Wazuh | Later |
 
-## What it demonstrates
-- **Networking:** VLAN segmentation, routing, DHCP and DNS
-- **Firewalling:** rule design between zones (default deny, one-way access from Trusted)
-- **Virtualisation:** Proxmox VMs and containers
-- **Linux administration:** a headless Pi 5 managed from the command line, Docker Compose, Samba, fstab
-- **Secure remote access:** Tailscale instead of port forwarding
-- **Hardware and fabrication:** a custom 3D-printed rack plate and trays
-- **Documentation:** a dated build log and a record of problems and fixes
+## Problems I hit
+
+- Copied an `.img.gz` instead of the extracted image when flashing
+- Pulled the USB installer before the reboot finished
+- Downloaded the wrong installer variant
+- Almost bought an unmanaged switch that can't do VLANs
+
+I'll add what each one taught me as the build goes on.
+
+## Repo structure
+
+```
+docs/        build notes and diagrams
+configs/     sanitised configs (no secrets)
+README.md
+```
 
 ## Security note
-This repository contains no credentials, tokens, firewall configuration backups or real network addresses. Example addresses are placeholders.
 
-## Author
-Seth Davies-Patrick, Bachelor of Information Technology student at La Trobe University.
+No credentials, API keys, auth keys or config backups are committed. See `.gitignore`.
