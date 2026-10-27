@@ -73,15 +73,6 @@ Internet -> Deco Wi-Fi -> pfSense -> patch panel -> TL-SG108E (802.1Q) -> device
 | Tailscale tested from outside the network | Planned |
 | Wazuh | Later |
 
-## Problems I hit
-
-- Copied an `.img.gz` instead of the extracted image when flashing
-- Pulled the USB installer before the reboot finished
-- Downloaded the wrong installer variant
-- Almost bought an unmanaged switch that can't do VLANs
-
-I'll add what each one taught me as the build goes on.
-
 ## Repo structure
 
 ```
