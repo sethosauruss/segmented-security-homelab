@@ -2,8 +2,6 @@
 
 A 6U rack-mounted homelab built to learn network segmentation, firewalling and monitoring on real hardware. It runs a pfSense firewall, a Proxmox host for attack and defence VMs, a VLAN-capable switch and a Raspberry Pi for services, with out-of-band management through a JetKVM.
 
-**Status:** parts ordered (27 Oct 2026), build planned for November.
-
 ## Goals
 
 - Segment the network into zones with VLANs and firewall rules
