@@ -59,18 +59,6 @@ Internet -> Deco Wi-Fi -> pfSense -> patch panel -> TL-SG108E (802.1Q) -> device
 - **Remote access:** Tailscale subnet router with ACLs, no port forwarding
 - **Planned:** Wazuh for detection, 16GB RAM upgrade for Proxmox
 
-## Build status
-
-| Step | Status |
-|------|--------|
-| Parts ordered (Amazon + eBay) | Done |
-| Rack assembly and cabling | Planned |
-| pfSense install and VLANs | Planned |
-| Proxmox install and lab VMs | Planned |
-| Pi rebuild and Plex restore | Planned |
-| Tailscale tested from outside the network | Planned |
-| Wazuh | Later |
-
 ## Repo structure
 
 ```
