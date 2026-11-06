@@ -80,9 +80,3 @@ Internet -> Deco Wi-Fi -> pfSense -> patch panel -> TL-SG108E (802.1Q) -> device
 - Safe, isolated attack and defence practice
 - Self-hosting with remote access that doesn't expose the home network
 - Documenting a build honestly, mistakes included
-
-## Problems I hit
-
-- Copied an `.img.gz` instead of the extracted image when flashing
-- Pulled the USB installer before the reboot finished
-- Downloaded the wrong
