@@ -18,9 +18,9 @@ A 6U rack-mounted homelab built to learn network segmentation, firewalling and m
 |------|--------|
 | Parts ordered and delivered | Done |
 | Rack assembled | Done |
-| HP BIOS setup (virtualization, boot, power) | In progress |
-| pfSense install | Next |
-| VLANs and firewall rules | Planned |
+| HP BIOS setup (virtualization, boot, power) | Done |
+| pfSense install, WAN on a tagged VLAN, LAN, DHCP and DNS | Done |
+| Internal VLANs (10/20/30/99) and firewall rules | Next |
 | Proxmox and lab VMs | Planned |
 | Pi rebuild (Pi-hole, Plex, Tailscale, Vaultwarden) | Planned |
 | Wazuh detection | Planned |
@@ -41,8 +41,18 @@ The power board sits at the bottom or back. Power bricks are strapped at the bac
 ## Network design
 
 ```
-Internet -> Deco Wi-Fi -> pfSense -> patch panel -> TL-SG108E (802.1Q) -> devices
+Internet -> Deco -> TL-SG108E (WAN VLAN 2) -> pfSense (one NIC, trunk) -> TL-SG108E (LAN) -> devices
 ```
+
+The firewall has a single onboard NIC, so it runs as a "router on a stick". One cable carries both networks as VLANs:
+
+| Switch port | Device | VLAN membership |
+|-------------|--------|-----------------|
+| 1 | Deco uplink | 2 (WAN), untagged |
+| 2 | pfSense trunk | 1 untagged (LAN), 2 tagged (WAN) |
+| 3-8 | Devices | 1 untagged for now |
+
+pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). Internal VLANs 10/20/30/99 get added on the same trunk next.
 
 | Zone | VLAN ID | Purpose |
 |------|---------|---------|
@@ -64,7 +74,6 @@ Internet -> Deco Wi-Fi -> pfSense -> patch panel -> TL-SG108E (802.1Q) -> device
 | Raspberry Pi 5 (4GB) | Plex, Pi-hole, Uptime Kuma, Tailscale, Vaultwarden |
 | JetKVM | Remote console and BIOS access, on the management VLAN |
 | Tecmojo 6U 10" rack + 12-port patch panel + brush panels | Enclosure and cable management |
-| USB3 Ethernet adapter | Second NIC for the firewall |
 
 ## Software
 
@@ -73,6 +82,15 @@ Internet -> Deco Wi-Fi -> pfSense -> patch panel -> TL-SG108E (802.1Q) -> device
 - **Pi:** Raspberry Pi OS Lite (64-bit), Docker Compose, Plex, Pi-hole, Uptime Kuma, Vaultwarden
 - **Remote access:** Tailscale subnet router with ACLs, no port forwarding
 - **Planned:** Wazuh for detection, 16GB RAM upgrade for Proxmox
+
+## Problems I hit
+
+**1. A USB Ethernet adapter made the WAN unreliable.**
+- The plan was a USB3 adapter as the second NIC. After a pfSense update, the WAN lost its address and the link kept flapping.
+- I first blamed the update. Checking `dmesg` and `usbconfig` showed the link going up and down on the adapter itself.
+- Different USB ports, forced 100 Mbps and disabling offload didn't help. Reinstalling the older pfSense version still flapped, which ruled out the update.
+- **Fix:** drop the adapter and use router-on-a-stick, with the WAN as a tagged VLAN on the onboard Intel NIC. Zero errors since.
+- **Lesson:** change one variable at a time, and test the hardware before blaming the software.
 
 ## What it demonstrates
 
