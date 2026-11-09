@@ -20,9 +20,11 @@ A 6U rack-mounted homelab built to learn network segmentation, firewalling and m
 | Rack assembled | Done |
 | HP BIOS setup (virtualization, boot, power) | Done |
 | pfSense install, WAN on a tagged VLAN, LAN, DHCP and DNS | Done |
-| Internal VLANs (10/20/30/99) and firewall rules | Next |
-| Proxmox and lab VMs | Planned |
-| Pi rebuild (Pi-hole, Plex, Tailscale, Vaultwarden) | Planned |
+| Internal VLANs (10/20/30/99), DHCP and default-deny firewall rules | Done, tested per zone |
+| Pi rebuild: Docker, Plex, Samba on the Trusted VLAN | Done, reboot-tested |
+| Tailscale, Pi-hole, Uptime Kuma, Vaultwarden | Planned |
+| Move my PC onto the Trusted VLAN | Planned |
+| Proxmox on a trunk port and lab VMs | Planned |
 | Wazuh detection | Planned |
 
 ## Rack layout (6U, 10")
@@ -50,16 +52,31 @@ The firewall has a single onboard NIC, so it runs as a "router on a stick". One 
 |-------------|--------|-----------------|
 | 1 | Deco uplink | 2 (WAN), untagged |
 | 2 | pfSense trunk | 1 untagged (LAN), 2 tagged (WAN) |
-| 3-8 | Devices | 1 untagged for now |
+| 2 (also) | pfSense trunk | 10, 20, 30, 99 tagged |
+| 4 | Raspberry Pi 5 | 10 (Trusted), untagged |
+| 7 | Test port | Moved between VLANs to test each zone |
+| 3, 5, 6, 8 | Spare / my PC | 1 untagged for now |
 
-pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). Internal VLANs 10/20/30/99 get added on the same trunk next.
+pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). The internal VLANs run as tagged sub-interfaces on the same trunk.
 
-| Zone | VLAN ID | Purpose |
-|------|---------|---------|
-| Trusted | 10 | Personal devices |
-| Lab | 20 | Proxmox VMs (Kali, vulnerable targets) |
-| IoT / DMZ | 30 | Anything exposed or untrusted |
-| Management | 99 | JetKVM and admin interfaces |
+| Zone | VLAN ID | Subnet | Purpose |
+|------|---------|--------|---------|
+| Trusted | 10 | 192.168.10.0/24 | Personal devices and the Pi |
+| Lab | 20 | 192.168.20.0/24 | Proxmox VMs (Kali, vulnerable targets) |
+| IoT / DMZ | 30 | 192.168.30.0/24 | Anything exposed or untrusted |
+| Management | 99 | 192.168.99.0/24 | JetKVM and admin interfaces |
+
+### Firewall policy
+
+Each zone is default-deny. pfSense reads rules top to bottom and the first match wins, so every zone follows the same pattern:
+
+| Zone | Rules, in order |
+|------|-----------------|
+| IoT, Lab | Allow DNS to pfSense, block everything to private networks, allow the rest (internet only) |
+| Management | Allow DNS, block private networks, allow NTP (UDP 123) and HTTPS (TCP 443) out |
+| Trusted | Allow all. Nothing in other zones can start a connection back in |
+
+The "private networks" rule uses one alias (`PRIVATE_NETS`: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), so it's edited in one place. I tested each zone from a laptop on the test port: the internet works, and ping to other zones and to the firewall's own address fails.
 
 - The TL-SG108E is an "Easy Smart" managed switch. Unmanaged switches can't do VLANs.
 - Cable colour coding uses white cables with coloured labels: green trusted, blue lab, orange IoT/DMZ, grey uplink.
@@ -79,9 +96,18 @@ pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). Internal 
 
 - **Firewall:** pfSense (routing, NAT, rules, VLAN interfaces)
 - **Hypervisor:** Proxmox VE (Kali, Metasploitable/DVWA, SIEM)
-- **Pi:** Raspberry Pi OS Lite (64-bit), Docker Compose, Plex, Pi-hole, Uptime Kuma, Vaultwarden
-- **Remote access:** Tailscale subnet router with ACLs, no port forwarding
+- **Pi:** Raspberry Pi OS Lite (64-bit), Docker Compose, Plex, Samba. Planned: Pi-hole, Uptime Kuma, Vaultwarden
+- **Remote access:** Tailscale subnet router with ACLs, no port forwarding (planned)
 - **Planned:** Wazuh for detection, 16GB RAM upgrade for Proxmox
+
+## Services on the Pi
+
+The Pi sits on the Trusted VLAN with a static DHCP reservation, so its address never changes.
+
+- **Storage:** a 1.8 TB ext4 drive is mounted by UUID in `/etc/fstab` with `nofail`, so the Pi still boots if the drive is unplugged.
+- **Plex:** runs in Docker Compose with host networking. The media folders are mounted into the container read-only (`:ro`), so Plex can't change or delete anything. Plex's database lives on the drive, which avoids wearing out the SD card.
+- **Samba:** shares only the movies and shows folders, with a user login. `hosts allow` limits access to my own subnets, so the Lab and IoT zones can't reach the shares.
+- **Secrets:** tokens and passwords are in `.env` files that are never committed. Each project commits a `.env.example` instead.
 
 ## Problems I hit
 
@@ -91,6 +117,16 @@ pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). Internal 
 - Different USB ports, forced 100 Mbps and disabling offload didn't help. Reinstalling the older pfSense version still flapped, which ruled out the update.
 - **Fix:** drop the adapter and use router-on-a-stick, with the WAN as a tagged VLAN on the onboard Intel NIC. Zero errors since.
 - **Lesson:** change one variable at a time, and test the hardware before blaming the software.
+
+**2. Switch VLAN lockout risk.**
+- The TL-SG108E can lock you out if you change VLANs and the management port's membership in the wrong order.
+- **Fix:** create VLAN 1 explicitly first, add the new VLAN second, then set port PVIDs, and save the config on the switch.
+
+**3. New VLANs could reach pfSense but DNS was refused.**
+- Clients on the new VLANs got an address and had internet by IP, but every DNS lookup returned `REFUSED`.
+- `REFUSED` (not a timeout or NXDOMAIN) meant the firewall rule was fine and Unbound's own access list was rejecting the clients.
+- **Fix:** add an explicit Unbound access list entry for each internal subnet, apply, and restart the resolver.
+- **Lesson:** the status code tells you which layer to blame. Also, after moving a switch port to a new VLAN the link stays up, so the client keeps its old lease until you renew it.
 
 ## What it demonstrates
 
