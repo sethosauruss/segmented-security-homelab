@@ -13,3 +13,7 @@ authkey*
 # OS junk
 .DS_Store
 Thumbs.db
+
+# keep example env files, block encrypted backups
+!.env.example
+*.gpg

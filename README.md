@@ -45,7 +45,7 @@ The power board sits at the bottom or back. Power bricks are strapped at the bac
 
 ## Network design
 
-![Network diagram](docs/images/network-diagram-square.png)
+![Network diagram](docs/images/network-diagram.png)
 
 ```
 Internet -> Deco -> TL-SG108E (WAN VLAN 2) -> pfSense (one NIC, trunk) -> TL-SG108E (LAN) -> devices
@@ -128,6 +128,39 @@ The Pi sits on the Trusted VLAN with a static DHCP reservation, so its address n
 - **Kali VM:** installed from the official ISO, which Proxmox verified against its SHA-256 checksum. It has 2 cores, 4 GB RAM and a 40 GB disk, sits on the Lab VLAN, and runs the QEMU guest agent. I took a `clean-install` snapshot so I can roll back after experiments.
 - **Isolation test from Kali:** the internet and DNS work. The firewall's own address, the Pi (Trusted), the Proxmox web interface (Management) and the Deco all time out. A VM in the Lab can reach the internet but nothing in my real network.
 - **Updates:** Debian's repositories use HTTPS. Proxmox's free repository needed the exception described in problem 5.
+
+## Problems I hit
+
+**1. A USB Ethernet adapter made the WAN unreliable.**
+- The plan was a USB3 adapter as the second NIC. After a pfSense update, the WAN lost its address and the link kept flapping.
+- I first blamed the update. Checking `dmesg` and `usbconfig` showed the link going up and down on the adapter itself.
+- Different USB ports, forced 100 Mbps and disabling offload didn't help. Reinstalling the older pfSense version still flapped, which ruled out the update.
+- **Fix:** drop the adapter and use router-on-a-stick, with the WAN as a tagged VLAN on the onboard Intel NIC. Zero errors since.
+- **Lesson:** change one variable at a time, and test the hardware before blaming the software.
+
+**2. Switch VLAN lockout risk.**
+- The TL-SG108E can lock you out if you change VLANs and the management port's membership in the wrong order.
+- **Fix:** create VLAN 1 explicitly first, add the new VLAN second, then set port PVIDs, and save the config on the switch.
+
+**3. New VLANs could reach pfSense but DNS was refused.**
+- Clients on the new VLANs got an address and had internet by IP, but every DNS lookup returned `REFUSED`.
+- `REFUSED` (not a timeout or NXDOMAIN) meant the firewall rule was fine and Unbound's own access list was rejecting the clients.
+- **Fix:** add an explicit Unbound access list entry for each internal subnet, apply, and restart the resolver.
+- **Lesson:** the status code tells you which layer to blame. Also, after moving a switch port to a new VLAN the link stays up, so the client keeps its old lease until you renew it.
+
+**4. Plex played at low quality on the home Wi-Fi.**
+- TVs and phones on the Deco network were slow to load and stuck at about 420p.
+- The Plex dashboard showed the Apple TV's connection as `Indirect` at about 1 Mbps, and a 1080p HEVC file was being transcoded down. That meant the stream was going through Plex's internet relay.
+- The Deco sits upstream of pfSense, so Plex can't treat those devices as local. The Pi 5 can't hardware transcode either, so it couldn't keep up with the relay's cap.
+- **Fix:** reserve pfSense's WAN address on the Deco, forward TCP 32400 from the Deco subnet only to the Pi, set a custom server access URL in Plex, and turn Relay off so clients use the direct route.
+- **Lesson:** read the dashboard before changing settings. `Indirect` pointed straight at the relay instead of the network or the file.
+
+**5. Proxmox updates failed in the Management zone.**
+- Management only allows DNS, NTP and HTTPS out. Proxmox's repository entries used plain HTTP (port 80), so `apt update` timed out.
+- Switching them to HTTPS fixed Debian's repositories, but Proxmox's free repository failed with `certificate verify failed`. Checking with `curl -v` showed `subjectAltName does not match hostname download.proxmox.com`: the CDN node answered with a valid certificate for `enterprise.proxmox.com`, not the name I asked for.
+- I didn't switch certificate checking off. The packages and the repository index are signed with Proxmox's key and apt verifies that signature, so plain HTTP is safe for this one repository.
+- **Fix:** a firewall rule allowing TCP 80 from the Proxmox host only, to a hostname alias for `download.proxmox.com` only. Everything else in Management stays HTTPS-only.
+- **Lesson:** read the verification error before bypassing it, and keep any exception as narrow as it can be.
 
 ## What it demonstrates
 
