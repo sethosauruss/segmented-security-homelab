@@ -9,7 +9,7 @@ A 6U rack-mounted homelab built to learn network segmentation, firewalling and m
 - Segment the network into zones with VLANs and firewall rules
 - Run attacker and vulnerable VMs in an isolated lab
 - Collect logs and detect attacks (SIEM)
-- Remote access without port forwarding
+- Remote access without opening the home network to the internet
 - Document the whole build, including mistakes
 
 ## Status
@@ -24,7 +24,10 @@ A 6U rack-mounted homelab built to learn network segmentation, firewalling and m
 | Pi rebuild: Docker, Plex, Samba on the Trusted VLAN | Done, reboot-tested |
 | Tailscale, Vaultwarden (restore-tested backup), Uptime Kuma, SSH hardening | Done |
 | Move my PC onto the Trusted VLAN | Planned |
-| Proxmox on a trunk port and lab VMs | Planned |
+| Proxmox on the Management VLAN, updates working | Done |
+| Kali VM in the Lab (VLAN 20), isolation tested | Done |
+| Vulnerable target (DVWA) and attack tests from Kali | Planned |
+| JetKVM moved to the Management VLAN | Planned |
 | Wazuh detection | Planned |
 
 ## Rack layout (6U, 10")
@@ -41,6 +44,8 @@ A 6U rack-mounted homelab built to learn network segmentation, firewalling and m
 The power board sits at the bottom or back. Power bricks are strapped at the back and the media drive is stuck to the rear.
 
 ## Network design
+
+![Network diagram](docs/images/network-diagram.png)
 
 ```
 Internet -> Deco -> TL-SG108E (WAN VLAN 2) -> pfSense (one NIC, trunk) -> TL-SG108E (LAN) -> devices
@@ -59,12 +64,14 @@ The firewall has a single onboard NIC, so it runs as a "router on a stick". One 
 
 pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). The internal VLANs run as tagged sub-interfaces on the same trunk.
 
+The Proxmox host has its own switch port: Management (99) untagged and Lab (20) tagged. Its VLAN-aware bridge tags each VM onto the right VLAN, so one cable carries both the host and the lab VMs.
+
 | Zone | VLAN ID | Subnet | Purpose |
 |------|---------|--------|---------|
 | Trusted | 10 | 192.168.10.0/24 | Personal devices and the Pi |
-| Lab | 20 | 192.168.20.0/24 | Proxmox VMs (Kali, vulnerable targets) |
+| Lab | 20 | 192.168.20.0/24 | Proxmox VMs (Kali running, vulnerable targets planned) |
 | IoT / DMZ | 30 | 192.168.30.0/24 | Anything exposed or untrusted |
-| Management | 99 | 192.168.99.0/24 | JetKVM and admin interfaces |
+| Management | 99 | 192.168.99.0/24 | Proxmox host, JetKVM and admin interfaces |
 
 ### Firewall policy
 
@@ -73,7 +80,7 @@ Each zone is default-deny. pfSense reads rules top to bottom and the first match
 | Zone | Rules, in order |
 |------|-----------------|
 | IoT, Lab | Allow DNS to pfSense, block everything to private networks, allow the rest (internet only) |
-| Management | Allow DNS, block private networks, allow NTP (UDP 123) and HTTPS (TCP 443) out |
+| Management | Allow DNS, block private networks, allow NTP (UDP 123) and HTTPS (TCP 443) out, plus one narrow exception: TCP 80 from the Proxmox host to a single hostname (see problem 5) |
 | Trusted | Allow all. Nothing in other zones can start a connection back in |
 
 The "private networks" rule uses one alias (`PRIVATE_NETS`: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), so it's edited in one place. I tested each zone from a laptop on the test port: the internet works, and ping to other zones and to the firewall's own address fails.
@@ -89,13 +96,13 @@ The "private networks" rule uses one alias (`PRIVATE_NETS`: 10.0.0.0/8, 172.16.0
 | 2 × HP EliteDesk 800 G3 Mini (i5-6500T, 8GB, 256GB) | Firewall and Proxmox host |
 | TP-Link TL-SG108E | VLAN switch |
 | Raspberry Pi 5 (4GB) | Plex, Samba, Uptime Kuma, Tailscale, Vaultwarden |
-| JetKVM | Remote console and BIOS access, on the management VLAN |
+| JetKVM | Remote console and BIOS access (moving to the management VLAN) |
 | Tecmojo 6U 10" rack + 12-port patch panel + brush panels | Enclosure and cable management |
 
 ## Software
 
 - **Firewall:** pfSense (routing, NAT, rules, VLAN interfaces)
-- **Hypervisor:** Proxmox VE (Kali, Metasploitable/DVWA, SIEM)
+- **Hypervisor:** Proxmox VE 9 (Kali running; DVWA and a SIEM planned)
 - **Pi:** Raspberry Pi OS Lite (64-bit), Docker Compose, Plex, Samba, Vaultwarden, Uptime Kuma
 - **Remote access:** Tailscale to reach the Pi's services, nothing exposed to the internet. A subnet router with ACLs is planned.
 - **Planned:** Wazuh for detection, 16GB RAM upgrade for Proxmox
@@ -115,41 +122,17 @@ The Pi sits on the Trusted VLAN with a static DHCP reservation, so its address n
 - **SSH:** key-only login, password and root login off, 3 attempts per connection, only my own user allowed.
 - **Plex port forward:** the only forward on the firewall. It accepts TCP 32400 from the home Wi-Fi (Deco) subnet only and sends it to the Pi. See problem 4.
 
-## Problems I hit
+## Proxmox and the lab
 
-**1. A USB Ethernet adapter made the WAN unreliable.**
-- The plan was a USB3 adapter as the second NIC. After a pfSense update, the WAN lost its address and the link kept flapping.
-- I first blamed the update. Checking `dmesg` and `usbconfig` showed the link going up and down on the adapter itself.
-- Different USB ports, forced 100 Mbps and disabling offload didn't help. Reinstalling the older pfSense version still flapped, which ruled out the update.
-- **Fix:** drop the adapter and use router-on-a-stick, with the WAN as a tagged VLAN on the onboard Intel NIC. Zero errors since.
-- **Lesson:** change one variable at a time, and test the hardware before blaming the software.
-
-**2. New VLANs could reach pfSense but DNS was refused.**
-- Clients on the new VLANs got an address and had internet by IP, but every DNS lookup returned `REFUSED`.
-- `REFUSED` (not a timeout or NXDOMAIN) meant the firewall rule was fine and Unbound's own access list was rejecting the clients.
-- **Fix:** add an explicit Unbound access list entry for each internal subnet, apply, and restart the resolver.
-- **Lesson:** the status code tells you which layer to blame. Also, after moving a switch port to a new VLAN the link stays up, so the client keeps its old lease until you renew it.
-
-**3. Plex played at low quality on the home Wi-Fi.**
-- TVs and phones on the Deco network were slow to load and stuck at about 420p.
-- The Plex dashboard showed the Apple TV's connection as `Indirect` at about 1 Mbps, and a 1080p HEVC file was being transcoded down. That meant the stream was going through Plex's internet relay.
-- The Deco sits upstream of pfSense, so Plex can't treat those devices as local. The Pi 5 can't hardware transcode either, so it couldn't keep up with the relay's cap.
-- **Fix:** reserve pfSense's WAN address on the Deco, forward TCP 32400 from the Deco subnet only to the Pi, set a custom server access URL in Plex, and turn Relay off so clients use the direct route.
-- **Lesson:** read the dashboard before changing settings. `Indirect` pointed straight at the relay instead of the network or the file.
+- **Host:** Proxmox VE 9 on the second EliteDesk, in the Management zone with a fixed address. Its bridge is VLAN-aware, so each VM is tagged onto a VLAN from its network settings.
+- **Kali VM:** installed from the official ISO, which Proxmox verified against its SHA-256 checksum. It has 2 cores, 4 GB RAM and a 40 GB disk, sits on the Lab VLAN, and runs the QEMU guest agent. I took a `clean-install` snapshot so I can roll back after experiments.
+- **Isolation test from Kali:** the internet and DNS work. The firewall's own address, the Pi (Trusted), the Proxmox web interface (Management) and the Deco all time out. A VM in the Lab can reach the internet but nothing in my real network.
+- **Updates:** Debian's repositories use HTTPS. Proxmox's free repository needed the exception described in problem 5.
 
 ## What it demonstrates
 
 - Network segmentation with VLANs and inter-zone firewall rules
+- Least privilege, with the one exception documented and tightly scoped
 - Safe, isolated attack and defence practice
 - Self-hosting with remote access that doesn't expose the home network
 - Documenting a build honestly, mistakes included
-
-| IoT, Lab | Allow DNS to pfSense, block everything to private networks, allow the rest (internet only) |
-| Management | Allow DNS, block private networks, allow NTP (UDP 123) and HTTPS (TCP 443) out |
-| Trusted | Allow all. Nothing in other zones can start a connection back in |
-
-The "private networks" rule uses one alias (`PRIVATE_NETS`: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), so it's edited in one place. I tested each zone from a laptop on the test port: the internet works, and ping to other zones and to the firewall's own address fails.
-
-- The TL-SG108E is an "Easy Smart" managed switch. Unmanaged switches can't do VLANs.
-- Cable colour coding uses white cables with coloured labels: green trusted, blue lab, orange IoT/DMZ, grey uplink.
-- Firewall rules are documented in [`docs/security.md`](docs/security.md).
