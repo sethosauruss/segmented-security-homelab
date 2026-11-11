@@ -20,8 +20,8 @@ All prices in AUD. Where I bought each part is listed so the build can be reprod
 
 | Part | Role |
 |------|------|
-| Raspberry Pi 5 (4GB) | Pi-hole, Plex, Uptime Kuma, Tailscale, Vaultwarden |
-| USB3-to-Gigabit Ethernet adapter (ASIX AX88179) | Second NIC for the firewall |
+| Raspberry Pi 5 (4GB) | Plex, Samba, Uptime Kuma, Tailscale, Vaultwarden |
+| USB3-to-Gigabit Ethernet adapter (ASIX AX88179) | Tried as the firewall's second NIC, replaced by router-on-a-stick (see README, problem 1) |
 | DisplayPort-to-HDMI active adapter | Connects the HP Minis to a monitor during setup |
 | Fujitsu till PC | Spare test firewall |
 | Cable labels, velcro, zip ties | Cable management |
@@ -48,4 +48,3 @@ All prices in AUD. Where I bought each part is listed so the build can be reprod
 | eBay | $379.90 |
 | JB Hi-Fi (at RRP: $31.96 + $59.00) | $90.96 |
 | **Total at RRP** | **$985.56** |
-| Paid (JB items at staff discount) | $932.90 |
