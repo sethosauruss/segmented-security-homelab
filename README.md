@@ -43,6 +43,8 @@ A 6U rack-mounted homelab built to learn network segmentation, firewalling and m
 
 The power board sits at the bottom or back. Power bricks are strapped at the back and the media drive is stuck to the rear.
 
+![The rack](docs/images/rack-photo.jpg)
+
 ## Network design
 
 ![Network diagram](docs/images/network-diagram.png)
@@ -161,6 +163,11 @@ The Pi sits on the Trusted VLAN with a static DHCP reservation, so its address n
 - I didn't switch certificate checking off. The packages and the repository index are signed with Proxmox's key and apt verifies that signature, so plain HTTP is safe for this one repository.
 - **Fix:** a firewall rule allowing TCP 80 from the Proxmox host only, to a hostname alias for `download.proxmox.com` only. Everything else in Management stays HTTPS-only.
 - **Lesson:** read the verification error before bypassing it, and keep any exception as narrow as it can be.
+
+## Docs
+
+- [`docs/security.md`](docs/security.md): firewall rules, hardening, test results and known gaps
+- [`docs/parts-list.md`](docs/parts-list.md): everything I bought for the build
 
 ## What it demonstrates
 
