@@ -129,9 +129,3 @@ Note: Management also blocks ping to everything, because the `PRIVATE_NETS` bloc
 - **No detection yet.** Wazuh is planned to collect logs from the Lab.
 - **Backups are on the Pi's drive only.** Copies to another machine are planned.
 - **Plex forward** exposes TCP 32400 to the Deco subnet. It is limited by source, but it is still a service on the Pi reachable from Wi-Fi devices.
-
-## Lessons
-
-- Change one variable at a time, and test before blaming the software.
-- The error code tells you which layer is at fault (`REFUSED` pointed at Unbound, not the firewall).
-- Read a verification error before bypassing it, and keep any exception as narrow as it can be.
