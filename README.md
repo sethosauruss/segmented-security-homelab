@@ -45,7 +45,7 @@ The power board sits at the bottom or back. Power bricks are strapped at the bac
 
 ## Network design
 
-![Network diagram](docs/images/network-diagram.png)
+![Network diagram](docs/images/network-diagram-square.png)
 
 ```
 Internet -> Deco -> TL-SG108E (WAN VLAN 2) -> pfSense (one NIC, trunk) -> TL-SG108E (LAN) -> devices
