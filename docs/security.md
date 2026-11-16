@@ -98,6 +98,14 @@ pfSense evaluates rules top to bottom and the first match wins. A zone with no m
 - SSH key-only. Drop-in file `/etc/ssh/sshd_config.d/00-hardening.conf` sets: `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin prohibit-password`, `MaxAuthTries 3`, `LoginGraceTime 30`, `X11Forwarding no`. Verified with `sshd -T` and by testing both a key login and a forced password login.
 - The change was applied with `reload`, with the JetKVM console open as a way back in.
 
+### Switch (TL-SG108E)
+
+- Each port is a member only of the VLANs it needs. I compare the 802.1Q table against the design after any change, because the firewall tests don't catch layer-2 leaks.
+- Proxmox (port 3) carries Management untagged and Lab tagged, and is not in VLAN 1. The JetKVM (port 5) is Management only. The Pi (port 4) and my PC (port 8) are Trusted only.
+- Unused and test ports are parked in VLAN 999 (`PARKED`), which has no firewall interface, so a device plugged in there can't reach any network.
+- Port 6 stays on VLAN 1 as a recovery port, in case a VLAN change locks me out of the switch's own page.
+- I save a switch config backup before VLAN changes, and keep it out of the repo.
+
 ### Lab VMs
 
 - Kali sits on the Lab VLAN with a `clean-install` snapshot to roll back after experiments.
@@ -123,6 +131,7 @@ I tested each zone from a laptop on a test switch port, then retested the Lab fr
 | From Kali: reach the DVWA web app (same VLAN) | Works, by design | Pass |
 | Proxmox SSH: key login | Works | Pass |
 | Proxmox SSH: forced password login | Refused | Pass (`Permission denied (publickey)`) |
+| Switch audit: each port's VLAN membership matches the design | Match | Fixed two leftovers (Proxmox port in VLAN 1, test port in Management), then Pass |
 | Vaultwarden backup restored into a clean container | Data intact | Pass |
 | Pi reboot: drive, Docker, Plex and Samba return on their own | Yes | Pass |
 
@@ -135,6 +144,8 @@ Note: Management also blocks ping to everything, because the `PRIVATE_NETS` bloc
 - **Lab VMs can reach the internet.** The vulnerable DVWA VM could make outbound connections. A tighter rule, or a separate attack-only network, may follow.
 - **Trusted can start connections into the Lab.** That is intended, because I work on the lab from my PC, but a compromised PC could reach the lab.
 - **Same-VLAN VMs trust each other.** Kali and DVWA talk directly across the Proxmox bridge without passing through the firewall.
+- **The switch's web page uses plain HTTP.** The TL-SG108E has no HTTPS, and its page is reachable from Trusted through the firewall, so its login could be sniffed by a compromised device on the path.
+- **Port 6 is an open VLAN 1 port.** It is the recovery port. Physical access is out of scope, but I leave it unplugged.
 - **Proxmox web login has no second factor yet.** Two-factor on the root login is planned.
 - **Uptime Kuma is published on all of the Pi's interfaces.** Only the Trusted VLAN can reach it, but binding it to one address is planned.
 - **pfSense is on 2.7.2.** An upgrade is planned at a quiet time, after saving a configuration backup.

@@ -62,13 +62,28 @@ The firewall has a single onboard NIC, so it runs as a "router on a stick". One 
 | 1 | Deco uplink | 2 (WAN), untagged |
 | 2 | pfSense trunk | 1 untagged (LAN), 2 tagged (WAN) |
 | 2 (also) | pfSense trunk | 10, 20, 30, 99 tagged |
+| 3 | Proxmox host | 99 (Management) untagged, 20 (Lab) tagged |
 | 4 | Raspberry Pi 5 | 10 (Trusted), untagged |
 | 5 | JetKVM | 99 (Management), untagged |
-| 7 | Test port | Moved between VLANs to test each zone |
+| 6 | Recovery port | 1 (LAN) untagged, my way back in if a VLAN change locks me out |
+| 7 | Test port | Parked in VLAN 999 (no routing). Moved into a zone VLAN to test it, then back |
 | 8 | My PC | 10 (Trusted), untagged |
-| 3, 6 | Proxmox host and a spare | Host: 99 untagged, 20 tagged. Spare: 1 untagged |
 
 pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). The internal VLANs run as tagged sub-interfaces on the same trunk.
+
+### Patch panel
+
+Every device except the Pi goes through the 12-port patch panel. That way I can trace or swap any link from the front without touching the switch's VLAN settings. Both ends of each cable are labelled with the panel port and the device.
+
+| Panel port | Device | Switch port |
+|------------|--------|-------------|
+| 1 | Deco uplink | 1 |
+| 2 | pfSense trunk | 2 |
+| 3 | Proxmox host | 3 |
+| 4 | JetKVM | 5 |
+| 12 | My PC | 8 |
+
+Panel ports 5 to 11 are spare. The Pi plugs straight into switch port 4 from its shelf. VLAN membership belongs to the switch port, not the panel port, so a device must stay on its switch port or it lands on the wrong VLAN.
 
 The Proxmox host has its own switch port: Management (99) untagged and Lab (20) tagged. Its VLAN-aware bridge tags each VM onto the right VLAN, so one cable carries both the host and the lab VMs.
 
@@ -170,6 +185,12 @@ The Pi sits on the Trusted VLAN with a static DHCP reservation, so its address n
 - I didn't switch certificate checking off. The packages and the repository index are signed with Proxmox's key and apt verifies that signature, so plain HTTP is safe for this one repository.
 - **Fix:** a firewall rule allowing TCP 80 from the Proxmox host only, to a hostname alias for `download.proxmox.com` only. Everything else in Management stays HTTPS-only.
 - **Lesson:** read the verification error before bypassing it, and keep any exception as narrow as it can be.
+
+**6. Leftover VLAN membership on the switch.**
+- While planning the cable tidy I read the switch's 802.1Q table instead of trusting my notes. The Proxmox port was an untagged member of both Management and the LAN VLAN 1, and my spare test port had been left untagged in Management.
+- Nothing was broken, and my zone tests didn't catch it. They test traffic that goes through the firewall, not what the switch itself lets share a cable.
+- **Fix:** I removed port 3 from VLAN 1, created VLAN 999 `PARKED` with no firewall interface and moved port 7 into it, and kept port 6 on VLAN 1 as a recovery port. I changed one port at a time and re-checked pings and Uptime Kuma after each change.
+- **Lesson:** firewall tests don't see layer-2 leaks, so audit the switch's membership table too.
 
 ## Docs
 
