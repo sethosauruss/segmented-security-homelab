@@ -23,11 +23,13 @@ A 6U rack-mounted homelab built to learn network segmentation, firewalling and m
 | Internal VLANs (10/20/30/99), DHCP and default-deny firewall rules | Done, tested per zone |
 | Pi rebuild: Docker, Plex, Samba on the Trusted VLAN | Done, reboot-tested |
 | Tailscale, Vaultwarden (restore-tested backup), Uptime Kuma, SSH hardening | Done |
-| Move my PC onto the Trusted VLAN | Planned |
+| My PC moved onto the Trusted VLAN | Done |
+| JetKVM moved to the Management VLAN | Done, Lab isolation tested |
 | Proxmox on the Management VLAN, updates working | Done |
+| Proxmox SSH hardened (key-only, tested both ways) | Done |
 | Kali VM in the Lab (VLAN 20), isolation tested | Done |
-| Vulnerable target (DVWA) and attack tests from Kali | Planned |
-| JetKVM moved to the Management VLAN | Planned |
+| DVWA target VM in the Lab, isolation tested | Done |
+| Attack tests from Kali against DVWA | Planned |
 | Wazuh detection | Planned |
 
 ## Rack layout (6U, 10")
@@ -61,8 +63,10 @@ The firewall has a single onboard NIC, so it runs as a "router on a stick". One 
 | 2 | pfSense trunk | 1 untagged (LAN), 2 tagged (WAN) |
 | 2 (also) | pfSense trunk | 10, 20, 30, 99 tagged |
 | 4 | Raspberry Pi 5 | 10 (Trusted), untagged |
+| 5 | JetKVM | 99 (Management), untagged |
 | 7 | Test port | Moved between VLANs to test each zone |
-| 3, 5, 6, 8 | Spare / my PC | 1 untagged for now |
+| 8 | My PC | 10 (Trusted), untagged |
+| 3, 6 | Proxmox host and a spare | Host: 99 untagged, 20 tagged. Spare: 1 untagged |
 
 pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). The internal VLANs run as tagged sub-interfaces on the same trunk.
 
@@ -71,7 +75,7 @@ The Proxmox host has its own switch port: Management (99) untagged and Lab (20) 
 | Zone | VLAN ID | Subnet | Purpose |
 |------|---------|--------|---------|
 | Trusted | 10 | 192.168.10.0/24 | Personal devices and the Pi |
-| Lab | 20 | 192.168.20.0/24 | Proxmox VMs (Kali running, vulnerable targets planned) |
+| Lab | 20 | 192.168.20.0/24 | Proxmox VMs (Kali attacker and DVWA target running) |
 | IoT / DMZ | 30 | 192.168.30.0/24 | Anything exposed or untrusted |
 | Management | 99 | 192.168.99.0/24 | Proxmox host, JetKVM and admin interfaces |
 
@@ -98,13 +102,13 @@ The "private networks" rule uses one alias (`PRIVATE_NETS`: 10.0.0.0/8, 172.16.0
 | 2 × HP EliteDesk 800 G3 Mini (i5-6500T, 8GB, 256GB) | Firewall and Proxmox host |
 | TP-Link TL-SG108E | VLAN switch |
 | Raspberry Pi 5 (4GB) | Plex, Samba, Uptime Kuma, Tailscale, Vaultwarden |
-| JetKVM | Remote console and BIOS access (moving to the management VLAN) |
+| JetKVM | Remote console and BIOS access, on the Management VLAN |
 | Tecmojo 6U 10" rack + 12-port patch panel + brush panels | Enclosure and cable management |
 
 ## Software
 
 - **Firewall:** pfSense (routing, NAT, rules, VLAN interfaces)
-- **Hypervisor:** Proxmox VE 9 (Kali running; DVWA and a SIEM planned)
+- **Hypervisor:** Proxmox VE 9 (Kali and DVWA running; a SIEM planned)
 - **Pi:** Raspberry Pi OS Lite (64-bit), Docker Compose, Plex, Samba, Vaultwarden, Uptime Kuma
 - **Remote access:** Tailscale to reach the Pi's services, nothing exposed to the internet. A subnet router with ACLs is planned.
 - **Planned:** Wazuh for detection, 16GB RAM upgrade for Proxmox
@@ -115,12 +119,12 @@ The Pi sits on the Trusted VLAN with a static DHCP reservation, so its address n
 
 - **Storage:** a 1.8 TB ext4 drive is mounted by UUID in `/etc/fstab` with `nofail`, so the Pi still boots if the drive is unplugged.
 - **Plex:** runs in Docker Compose with host networking. The media folders are mounted into the container read-only (`:ro`), so Plex can't change or delete anything. Plex's database lives on the drive, which avoids wearing out the SD card.
-- **Samba:** shares only the movies and shows folders, with a user login. `hosts allow` limits access to my own subnets, so the Lab and IoT zones can't reach the shares.
+- **Samba:** shares only the movies and shows folders, with a user login. The default home and printer shares are removed. `hosts allow` limits access to my own subnets, so the Lab and IoT zones can't reach the shares.
 - **Secrets:** tokens and passwords are in `.env` files that are never committed. Each project commits a `.env.example` instead.
 - **Reboot test:** after a restart the drive, Docker, Plex and Samba all come back on their own.
 - **Tailscale:** installed on the Pi and my PC for remote access. No router ports are opened for it.
 - **Vaultwarden:** self-hosted password manager in Docker. It listens on localhost only and is published to my Tailscale network over HTTPS with `tailscale serve`. Sign-ups are off. A nightly script makes an encrypted backup (SQLite `.backup`, then GPG AES-256), and I restore-tested it into a throwaway container before putting real passwords in.
-- **Uptime Kuma:** checks pfSense, the Deco, internet reachability, DNS, Plex and Samba every minute. Its data lives on the drive instead of the SD card to avoid wear.
+- **Uptime Kuma:** checks pfSense, the Deco, internet reachability, DNS, Plex, Samba and Proxmox every minute. Its data lives on the drive instead of the SD card to avoid wear.
 - **SSH:** key-only login, password and root login off, 3 attempts per connection, only my own user allowed.
 - **Plex port forward:** the only forward on the firewall. It accepts TCP 32400 from the home Wi-Fi (Deco) subnet only and sends it to the Pi. See problem 4.
 
@@ -130,6 +134,9 @@ The Pi sits on the Trusted VLAN with a static DHCP reservation, so its address n
 - **Kali VM:** installed from the official ISO, which Proxmox verified against its SHA-256 checksum. It has 2 cores, 4 GB RAM and a 40 GB disk, sits on the Lab VLAN, and runs the QEMU guest agent. I took a `clean-install` snapshot so I can roll back after experiments.
 - **Isolation test from Kali:** the internet and DNS work. The firewall's own address, the Pi (Trusted), the Proxmox web interface (Management) and the Deco all time out. A VM in the Lab can reach the internet but nothing in my real network.
 - **Updates:** Debian's repositories use HTTPS. Proxmox's free repository needed the exception described in problem 5.
+- **SSH:** key-only. Password and keyboard-interactive login are off, root can only log in with a key, and there are 3 attempts per connection. I tested both halves: the key works, and a forced password attempt gets `Permission denied (publickey)` with no prompt.
+- **DVWA target:** a Debian 13 VM (2 GB RAM, 20 GB disk, no desktop) on the Lab VLAN, running Apache, PHP and MariaDB. The database listens on localhost only. I took `clean-install` and `dvwa-ready` snapshots so I can roll back after attacks.
+- **Lab tests:** from the DVWA VM, Proxmox and pfSense time out while the internet works. Kali can reach DVWA across the Lab VLAN, which is intended. From Kali, the JetKVM (Management) times out.
 
 ## Problems I hit
 

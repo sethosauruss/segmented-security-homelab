@@ -81,6 +81,7 @@ pfSense evaluates rules top to bottom and the first match wins. A zone with no m
 - SSH key-only. Drop-in file `/etc/ssh/sshd_config.d/00-hardening.conf` sets: `PermitRootLogin no`, `MaxAuthTries 3`, `LoginGraceTime 30`, `AllowUsers` limited to my user, `X11Forwarding no`. It is named `00-` so it is read first and wins (sshd uses the first value it sees).
 - Verified with `sshd -T`, not just by reading the file.
 - Plex media folders are mounted read-only into the container.
+- Samba defines only the two media shares. The default home, printer and print$ shares are removed.
 - Secrets live in `.env` files that are never committed, and each project commits a `.env.example`.
 - The data drive uses `nofail`, so a missing drive cannot stop the Pi booting.
 
@@ -94,10 +95,13 @@ pfSense evaluates rules top to bottom and the first match wins. A zone with no m
 
 - Fixed address on the Management VLAN, VLAN-aware bridge, enterprise repository disabled.
 - System fully updated.
+- SSH key-only. Drop-in file `/etc/ssh/sshd_config.d/00-hardening.conf` sets: `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin prohibit-password`, `MaxAuthTries 3`, `LoginGraceTime 30`, `X11Forwarding no`. Verified with `sshd -T` and by testing both a key login and a forced password login.
+- The change was applied with `reload`, with the JetKVM console open as a way back in.
 
 ### Lab VMs
 
 - Kali sits on the Lab VLAN with a `clean-install` snapshot to roll back after experiments.
+- The DVWA target is a deliberately vulnerable web app on its own VM in the Lab VLAN. Its database listens on localhost only and uses a throwaway password. It has `clean-install` and `dvwa-ready` snapshots.
 - Isolation was tested from inside the VM (below).
 - Same-VLAN VMs talk directly across the Proxmox bridge without passing through the firewall, so VMs that must not trust each other should go on different VLANs.
 
@@ -113,6 +117,12 @@ I tested each zone from a laptop on a test switch port, then retested the Lab fr
 | From Kali: reach the Pi (Trusted) | Blocked | Pass (timeout) |
 | From Kali: reach the Proxmox web UI (Management) | Blocked | Pass (timeout) |
 | From Kali: reach the Deco | Blocked | Pass (timeout) |
+| From Kali: reach the JetKVM (Management) | Blocked | Pass (timeout) |
+| From the DVWA VM: reach Proxmox and pfSense | Blocked | Pass (timeout) |
+| From the DVWA VM: reach the internet | Works | Pass |
+| From Kali: reach the DVWA web app (same VLAN) | Works, by design | Pass |
+| Proxmox SSH: key login | Works | Pass |
+| Proxmox SSH: forced password login | Refused | Pass (`Permission denied (publickey)`) |
 | Vaultwarden backup restored into a clean container | Data intact | Pass |
 | Pi reboot: drive, Docker, Plex and Samba return on their own | Yes | Pass |
 
@@ -122,10 +132,18 @@ Note: Management also blocks ping to everything, because the `PRIVATE_NETS` bloc
 
 - **Home Wi-Fi is outside the firewall.** The Deco is upstream of pfSense, so phones, TVs and guests are not segmented by it.
 - **Trusted is allow-all.** It is the most trusted zone, but a compromised device there could reach everything. Outbound limits may follow.
-- **JetKVM is still on the LAN.** It is planned to move to the Management VLAN.
-- **My PC is not on the Trusted VLAN yet.**
-- **Proxmox SSH is not hardened yet** (key-only login to follow).
+- **Lab VMs can reach the internet.** The vulnerable DVWA VM could make outbound connections. A tighter rule, or a separate attack-only network, may follow.
+- **Trusted can start connections into the Lab.** That is intended, because I work on the lab from my PC, but a compromised PC could reach the lab.
+- **Same-VLAN VMs trust each other.** Kali and DVWA talk directly across the Proxmox bridge without passing through the firewall.
+- **Proxmox web login has no second factor yet.** Two-factor on the root login is planned.
+- **Uptime Kuma is published on all of the Pi's interfaces.** Only the Trusted VLAN can reach it, but binding it to one address is planned.
 - **pfSense is on 2.7.2.** An upgrade is planned at a quiet time, after saving a configuration backup.
 - **No detection yet.** Wazuh is planned to collect logs from the Lab.
 - **Backups are on the Pi's drive only.** Copies to another machine are planned.
 - **Plex forward** exposes TCP 32400 to the Deco subnet. It is limited by source, but it is still a service on the Pi reachable from Wi-Fi devices.
+
+## Lessons
+
+- Change one variable at a time, and test before blaming the software.
+- The error code tells you which layer is at fault (`REFUSED` pointed at Unbound, not the firewall).
+- Read a verification error before bypassing it, and keep any exception as narrow as it can be.
