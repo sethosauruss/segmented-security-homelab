@@ -9,6 +9,8 @@ Preferences.xml
 *.key
 *.pem
 authkey*
+*.xml
+*.cfg
 
 # OS junk
 .DS_Store
