@@ -108,7 +108,7 @@ The "private networks" rule uses one alias (`PRIVATE_NETS`: 10.0.0.0/8, 172.16.0
 
 - The TL-SG108E is an "Easy Smart" managed switch. Unmanaged switches can't do VLANs.
 - Cable colour coding uses white cables with coloured labels: green trusted, blue lab, orange IoT/DMZ, grey uplink.
-- Firewall rules are documented in [`docs/security.md`](docs/security.md).
+- Firewall rules are documented in [`docs/network-security.md`](docs/network-security.md).
 
 ## Hardware
 
@@ -194,7 +194,9 @@ The Pi sits on the Trusted VLAN with a static DHCP reservation, so its address n
 
 ## Docs
 
-- [`docs/security.md`](docs/security.md): firewall rules, hardening, test results and known gaps
+- [`docs/network-security.md`](docs/network-security.md): threat model, zones, firewall rules, DNS, remote access and hardening by host
+- [`docs/testing-and-gaps.md`](docs/testing-and-gaps.md): isolation test results, known gaps and lessons
+- [`docs/dvwa-pentest.md`](docs/dvwa-pentest.md): DVWA target setup and the attack log (brute force so far, more to come)
 - [`docs/parts-list.md`](docs/parts-list.md): everything I bought for the build
 
 ## What it demonstrates
