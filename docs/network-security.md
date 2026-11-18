@@ -14,6 +14,36 @@ This is a home network with a lab inside it. The risks I designed for:
 
 Out of scope: physical access to the rack, and the home Wi-Fi devices behind the Deco, which sit upstream of the firewall (see `testing-and-gaps.md`).
 
+## Switch and patch panel
+
+| Switch port | Device | VLAN membership |
+|-------------|--------|-----------------|
+| 1 | Deco uplink | 2 (WAN), untagged |
+| 2 | pfSense trunk | 1 untagged (LAN), 2 tagged (WAN) |
+| 2 (also) | pfSense trunk | 10, 20, 30, 99 tagged |
+| 3 | Proxmox host | 99 (Management) untagged, 20 (Lab) tagged |
+| 4 | Raspberry Pi 5 | 10 (Trusted), untagged |
+| 5 | JetKVM | 99 (Management), untagged |
+| 6 | Recovery port | 1 (LAN) untagged, my way back in if a VLAN change locks me out |
+| 7 | Test port | Parked in VLAN 999 (no routing). Moved into a zone VLAN to test it, then back |
+| 8 | My PC | 10 (Trusted), untagged |
+
+pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). The internal VLANs run as tagged sub-interfaces on the same trunk.
+
+Every device except the Pi goes through the 12-port patch panel. That way I can trace or swap any link from the front without touching the switch's VLAN settings. Both ends of each cable are labelled with the panel port and the device.
+
+| Panel port | Device | Switch port |
+|------------|--------|-------------|
+| 1 | Deco uplink | 1 |
+| 2 | pfSense trunk | 2 |
+| 3 | Proxmox host | 3 |
+| 4 | JetKVM | 5 |
+| 12 | My PC | 8 |
+
+Panel ports 5 to 11 are spare. The Pi plugs straight into switch port 4 from its shelf. VLAN membership belongs to the switch port, not the panel port, so a device must stay on its switch port or it lands on the wrong VLAN.
+
+The Proxmox host has its own switch port: Management (99) untagged and Lab (20) tagged. Its VLAN-aware bridge tags each VM onto the right VLAN, so one cable carries both the host and the lab VMs.
+
 ## Zones
 
 | Zone | VLAN | Subnet | Trust level |
