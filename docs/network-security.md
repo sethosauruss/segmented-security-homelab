@@ -2,6 +2,8 @@
 
 How the homelab is locked down: zones, firewall rules, DNS and remote access, then hardening per host. For test results and open gaps, see `testing-and-gaps.md`. For the DVWA attack log, see `dvwa-pentest.md`.
 
+![Network diagram](docs/images/network-diagram.png)
+
 ## Threat model
 
 This is a home network with a lab inside it. The risks I designed for:
