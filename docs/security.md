@@ -129,8 +129,6 @@ I tested each zone from a laptop on a test switch port, then retested the Lab fr
 | From the DVWA VM: reach Proxmox and pfSense | Blocked | Pass (timeout) |
 | From the DVWA VM: reach the internet | Works | Pass |
 | From Kali: reach the DVWA web app (same VLAN) | Works, by design | Pass |
-| Brute-force DVWA login (custom curl script, rotating CSRF token) | Credential found, no lockout at Low difficulty | Pass — found `admin:password` in 7 attempts |
-| Brute-force DVWA Brute Force module (Hydra, GET form) | Credential found, no lockout at Low difficulty | Pass — found `admin:password` cleanly via Hydra |
 | Proxmox SSH: key login | Works | Pass |
 | Proxmox SSH: forced password login | Refused | Pass (`Permission denied (publickey)`) |
 | Switch audit: each port's VLAN membership matches the design | Match | Fixed two leftovers (Proxmox port in VLAN 1, test port in Management), then Pass |
