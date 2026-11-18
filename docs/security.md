@@ -109,7 +109,7 @@ pfSense evaluates rules top to bottom and the first match wins. A zone with no m
 ### Lab VMs
 
 - Kali sits on the Lab VLAN with a `clean-install` snapshot to roll back after experiments.
-- The DVWA target is a deliberately vulnerable web app on its own VM in the Lab VLAN. Its database listens on localhost only and uses a throwaway password. It has `clean-install` and `dvwa-ready` snapshots.
+- The DVWA target is a deliberately vulnerable web app on its own VM in the Lab VLAN. Its database listens on localhost only and uses a throwaway password. It has `clean-install`, `dvwa-ready` and `attack-baseline` snapshots, the last taken once DVWA's own difficulty was set to Low for attack testing.
 - Isolation was tested from inside the VM (below).
 - Same-VLAN VMs talk directly across the Proxmox bridge without passing through the firewall, so VMs that must not trust each other should go on different VLANs.
 
@@ -129,6 +129,8 @@ I tested each zone from a laptop on a test switch port, then retested the Lab fr
 | From the DVWA VM: reach Proxmox and pfSense | Blocked | Pass (timeout) |
 | From the DVWA VM: reach the internet | Works | Pass |
 | From Kali: reach the DVWA web app (same VLAN) | Works, by design | Pass |
+| Brute-force DVWA login (custom curl script, rotating CSRF token) | Credential found, no lockout at Low difficulty | Pass — found `admin:password` in 7 attempts |
+| Brute-force DVWA Brute Force module (Hydra, GET form) | Credential found, no lockout at Low difficulty | Pass — found `admin:password` cleanly via Hydra |
 | Proxmox SSH: key login | Works | Pass |
 | Proxmox SSH: forced password login | Refused | Pass (`Permission denied (publickey)`) |
 | Switch audit: each port's VLAN membership matches the design | Match | Fixed two leftovers (Proxmox port in VLAN 1, test port in Management), then Pass |
@@ -136,6 +138,15 @@ I tested each zone from a laptop on a test switch port, then retested the Lab fr
 | Pi reboot: drive, Docker, Plex and Samba return on their own | Yes | Pass |
 
 Note: Management also blocks ping to everything, because the `PRIVATE_NETS` block comes before any pass rule. That is intended.
+
+### Note on brute-force tooling and false positives
+
+Both brute-force tests above only produced correct results once I'd verified the tooling itself. Two separate false-positive traps came up, worth documenting since they're more instructive than the brute force itself:
+
+- **Hydra's success/fail check depends entirely on matching exact text in the response.** A stale CSRF token, an unfollowed redirect, or a one-letter typo in the match string will all make Hydra report every single password as "valid", a false positive, not a real finding.
+- **DVWA's main login page rotates its CSRF token on every page load**, including after a failed attempt, so a token captured once goes stale after the first try. Fixed by fetching a fresh token immediately before each attempt in a custom script.
+- **DVWA's dedicated Brute Force module has no CSRF token at Low difficulty**, so Hydra worked directly once the field order (`H=` before `F=`) and the failure string were both exactly correct.
+- Every candidate password was confirmed with a real login in the browser before being treated as a result.
 
 ## Known gaps and next steps
 
@@ -152,9 +163,11 @@ Note: Management also blocks ping to everything, because the `PRIVATE_NETS` bloc
 - **No detection yet.** Wazuh is planned to collect logs from the Lab.
 - **Backups are on the Pi's drive only.** Copies to another machine are planned.
 - **Plex forward** exposes TCP 32400 to the Deco subnet. It is limited by source, but it is still a service on the Pi reachable from Wi-Fi devices.
+- **DVWA has no login lockout or rate-limiting at Low difficulty.** Confirmed by brute-forcing both its main login and its Brute Force module without any slowdown or block. Expected, since Low difficulty is designed to be undefended; worth re-testing at Medium/High to see the built-in delay DVWA adds there.
 
 ## Lessons
 
 - Change one variable at a time, and test before blaming the software.
 - The error code tells you which layer is at fault (`REFUSED` pointed at Unbound, not the firewall).
 - Read a verification error before bypassing it, and keep any exception as narrow as it can be.
+- A security tool's "success" is only as good as the check behind it. Verify every automated finding manually before trusting it.
