@@ -10,7 +10,7 @@ A 6U rack-mounted homelab built to learn network segmentation, firewalling and m
 - Run attacker and vulnerable VMs in an isolated lab
 - Collect logs and detect attacks (SIEM)
 - Remote access without opening the home network to the internet
-- Document the whole build, including mistakes
+- Document the whole build, including mistakes.
 
 ## Status
 
