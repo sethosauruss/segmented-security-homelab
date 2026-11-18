@@ -2,8 +2,6 @@
 
 How the homelab is locked down: zones, firewall rules, DNS and remote access, then hardening per host. For test results and open gaps, see `testing-and-gaps.md`. For the DVWA attack log, see `dvwa-pentest.md`.
 
-![Network diagram](docs/images/network-diagram.png)
-
 ## Threat model
 
 This is a home network with a lab inside it. The risks I designed for:
@@ -15,6 +13,15 @@ This is a home network with a lab inside it. The risks I designed for:
 - Losing the password vault
 
 Out of scope: physical access to the rack, and the home Wi-Fi devices behind the Deco, which sit upstream of the firewall (see `testing-and-gaps.md`).
+
+## Zones
+
+| Zone | VLAN | Subnet | Trust level |
+|------|------|--------|-------------|
+| Trusted | 10 | 192.168.10.0/24 | High: personal devices and the Pi |
+| Lab | 20 | 192.168.20.0/24 | Low: attack and vulnerable VMs |
+| IoT / DMZ | 30 | 192.168.30.0/24 | Low: anything untrusted or exposed |
+| Management | 99 | 192.168.99.0/24 | High: admin interfaces, tightly limited outbound |
 
 ## Switch and patch panel
 
@@ -45,15 +52,6 @@ Every device except the Pi goes through the 12-port patch panel. That way I can 
 Panel ports 5 to 11 are spare. The Pi plugs straight into switch port 4 from its shelf. VLAN membership belongs to the switch port, not the panel port, so a device must stay on its switch port or it lands on the wrong VLAN.
 
 The Proxmox host has its own switch port: Management (99) untagged and Lab (20) tagged. Its VLAN-aware bridge tags each VM onto the right VLAN, so one cable carries both the host and the lab VMs.
-
-## Zones
-
-| Zone | VLAN | Subnet | Trust level |
-|------|------|--------|-------------|
-| Trusted | 10 | 192.168.10.0/24 | High: personal devices and the Pi |
-| Lab | 20 | 192.168.20.0/24 | Low: attack and vulnerable VMs |
-| IoT / DMZ | 30 | 192.168.30.0/24 | Low: anything untrusted or exposed |
-| Management | 99 | 192.168.99.0/24 | High: admin interfaces, tightly limited outbound |
 
 ## Firewall rules (pfSense)
 
