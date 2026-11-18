@@ -45,7 +45,7 @@ A 6U rack-mounted homelab built to learn network segmentation, firewalling and m
 
 The power board sits at the bottom or back. Power bricks are strapped at the back and the media drive is stuck to the rear.
 
-![The rack](docs/images/rack-photo.jpg)
+![The rack](docs/images/rack_final_pixelated.jpg)
 
 ## Network design
 
