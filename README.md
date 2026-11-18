@@ -29,7 +29,7 @@ A 6U rack-mounted homelab built to learn network segmentation, firewalling and m
 | Proxmox SSH hardened (key-only, tested both ways) | Done |
 | Kali VM in the Lab (VLAN 20), isolation tested | Done |
 | DVWA target VM in the Lab, isolation tested | Done |
-| Attack tests from Kali against DVWA | Planned |
+| Attack tests from Kali against DVWA | In progress (brute force done) |
 | Wazuh detection | Planned |
 
 ## Rack layout (6U, 10")
@@ -55,44 +55,7 @@ The power board sits at the bottom or back. Power bricks are strapped at the bac
 Internet -> Deco -> TL-SG108E (WAN VLAN 2) -> pfSense (one NIC, trunk) -> TL-SG108E (LAN) -> devices
 ```
 
-The firewall has a single onboard NIC, so it runs as a "router on a stick". One cable carries both networks as VLANs:
-
-| Switch port | Device | VLAN membership |
-|-------------|--------|-----------------|
-| 1 | Deco uplink | 2 (WAN), untagged |
-| 2 | pfSense trunk | 1 untagged (LAN), 2 tagged (WAN) |
-| 2 (also) | pfSense trunk | 10, 20, 30, 99 tagged |
-| 3 | Proxmox host | 99 (Management) untagged, 20 (Lab) tagged |
-| 4 | Raspberry Pi 5 | 10 (Trusted), untagged |
-| 5 | JetKVM | 99 (Management), untagged |
-| 6 | Recovery port | 1 (LAN) untagged, my way back in if a VLAN change locks me out |
-| 7 | Test port | Parked in VLAN 999 (no routing). Moved into a zone VLAN to test it, then back |
-| 8 | My PC | 10 (Trusted), untagged |
-
-pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). The internal VLANs run as tagged sub-interfaces on the same trunk.
-
-### Patch panel
-
-Every device except the Pi goes through the 12-port patch panel. That way I can trace or swap any link from the front without touching the switch's VLAN settings. Both ends of each cable are labelled with the panel port and the device.
-
-| Panel port | Device | Switch port |
-|------------|--------|-------------|
-| 1 | Deco uplink | 1 |
-| 2 | pfSense trunk | 2 |
-| 3 | Proxmox host | 3 |
-| 4 | JetKVM | 5 |
-| 12 | My PC | 8 |
-
-Panel ports 5 to 11 are spare. The Pi plugs straight into switch port 4 from its shelf. VLAN membership belongs to the switch port, not the panel port, so a device must stay on its switch port or it lands on the wrong VLAN.
-
-The Proxmox host has its own switch port: Management (99) untagged and Lab (20) tagged. Its VLAN-aware bridge tags each VM onto the right VLAN, so one cable carries both the host and the lab VMs.
-
-| Zone | VLAN ID | Subnet | Purpose |
-|------|---------|--------|---------|
-| Trusted | 10 | 192.168.10.0/24 | Personal devices and the Pi |
-| Lab | 20 | 192.168.20.0/24 | Proxmox VMs (Kali attacker and DVWA target running) |
-| IoT / DMZ | 30 | 192.168.30.0/24 | Anything exposed or untrusted |
-| Management | 99 | 192.168.99.0/24 | Proxmox host, JetKVM and admin interfaces |
+The firewall has a single onboard NIC, so it runs as a "router on a stick", carrying all VLANs as tagged sub-interfaces on one trunk. pfSense maps the WAN to `em0.2` and the LAN to `em0` (192.168.1.0/24). Switch port layout, the patch panel, and the full zone breakdown are in [`docs/network-security.md`](docs/network-security.md).
 
 ### Firewall policy
 
@@ -141,21 +104,21 @@ The Pi sits on the Trusted VLAN with a static DHCP reservation, so its address n
 - **Vaultwarden:** self-hosted password manager in Docker. It listens on localhost only and is published to my Tailscale network over HTTPS with `tailscale serve`. Sign-ups are off. A nightly script makes an encrypted backup (SQLite `.backup`, then GPG AES-256), and I restore-tested it into a throwaway container before putting real passwords in.
 - **Uptime Kuma:** checks pfSense, the Deco, internet reachability, DNS, Plex, Samba and Proxmox every minute. Its data lives on the drive instead of the SD card to avoid wear.
 - **SSH:** key-only login, password and root login off, 3 attempts per connection, only my own user allowed.
-- **Plex port forward:** the only forward on the firewall. It accepts TCP 32400 from the home Wi-Fi (Deco) subnet only and sends it to the Pi. See problem 4.
+- **Plex port forward:** the only forward on the firewall. It accepts TCP 32400 from the home Wi-Fi (Deco) subnet only and sends it to the Pi.
 
 ## Proxmox and the lab
 
 - **Host:** Proxmox VE 9 on the second EliteDesk, in the Management zone with a fixed address. Its bridge is VLAN-aware, so each VM is tagged onto a VLAN from its network settings.
 - **Kali VM:** installed from the official ISO, which Proxmox verified against its SHA-256 checksum. It has 2 cores, 4 GB RAM and a 40 GB disk, sits on the Lab VLAN, and runs the QEMU guest agent. I took a `clean-install` snapshot so I can roll back after experiments.
 - **Isolation test from Kali:** the internet and DNS work. The firewall's own address, the Pi (Trusted), the Proxmox web interface (Management) and the Deco all time out. A VM in the Lab can reach the internet but nothing in my real network.
-- **Updates:** Debian's repositories use HTTPS. Proxmox's free repository needed the exception described in problem 5.
+- **Updates:** Debian's repositories use HTTPS. Proxmox's free repository needed a narrow exception, documented in `docs/network-security.md`.
 - **SSH:** key-only. Password and keyboard-interactive login are off, root can only log in with a key, and there are 3 attempts per connection. I tested both halves: the key works, and a forced password attempt gets `Permission denied (publickey)` with no prompt.
 - **DVWA target:** a Debian 13 VM (2 GB RAM, 20 GB disk, no desktop) on the Lab VLAN, running Apache, PHP and MariaDB. The database listens on localhost only. I took `clean-install` and `dvwa-ready` snapshots so I can roll back after attacks.
 - **Lab tests:** from the DVWA VM, Proxmox and pfSense time out while the internet works. Kali can reach DVWA across the Lab VLAN, which is intended. From Kali, the JetKVM (Management) times out.
 
 ## Docs
 
-- [`docs/network-security.md`](docs/network-security.md): threat model, zones, firewall rules, DNS, remote access and hardening by host
+- [`docs/network-security.md`](docs/network-security.md): threat model, zones, switch/patch panel, firewall rules, DNS, remote access and hardening by host
 - [`docs/testing-and-gaps.md`](docs/testing-and-gaps.md): isolation test results, known gaps and lessons
 - [`docs/dvwa-pentest.md`](docs/dvwa-pentest.md): DVWA target setup and the attack log (brute force so far, more to come)
 - [`docs/parts-list.md`](docs/parts-list.md): everything I bought for the build
